@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import file_handler
 import database_processor
+import validator
 
 # --- Configuração da Página e Títulos ---
 st.set_page_config(page_title="Consolidador Excel", layout="wide")
@@ -28,10 +29,13 @@ if uploaded_files:
             with st.spinner("Processando... Isso pode levar alguns minutos dependendo do tamanho dos arquivos."):
                 
                 # 1. Chama o file_handler para começar a ler os arquivos
-                dataframes_generator = file_handler.parse_excel_files(uploaded_files)
+                dataframes_generator, source_manifest = file_handler.parse_excel_files(uploaded_files)
 
                 # 2. Chama o database_processor para fazer a consolidação
                 final_df, report_log = database_processor.consolidate_data(dataframes_generator)
+                
+                # 3. Chama o validator para verificar integridade
+                validation_report = validator.validate_consolidation(final_df, source_manifest)
             
             # --- Exibição dos Resultados ---
             st.success("🎉 Consolidação concluída com sucesso!")
@@ -39,6 +43,7 @@ if uploaded_files:
             # Armazena os resultados no estado da sessão para que não se percam
             st.session_state['final_df'] = final_df
             st.session_state['report_log'] = report_log
+            st.session_state['validation_report'] = validation_report
             st.session_state['processed'] = True
 
         except Exception as e:
@@ -49,6 +54,13 @@ if uploaded_files:
 
 # --- Exibição Permanente dos Resultados após o processamento ---
 if st.session_state.get('processed', False):
+    
+    st.subheader("🔍 Relatório de Validação de Integridade")
+    st.text_area(
+        "Status da validação de integridade dos dados:", 
+        value=st.session_state['validation_report'], 
+        height=300
+    )
     
     st.subheader("📋 Relatório de Anomalias")
     st.text_area(

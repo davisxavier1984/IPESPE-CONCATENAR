@@ -10,9 +10,14 @@ def parse_excel_files(uploaded_files):
     Args:
         uploaded_files: Uma lista de objetos de arquivo carregados pelo Streamlit.
 
-    Yields:
-        pd.DataFrame: Um DataFrame para cada tabela encontrada, com colunas de rastreabilidade.
+    Returns:
+        tuple: (generator, source_manifest)
+            - generator: Um gerador que produz DataFrames para cada tabela encontrada
+            - source_manifest: Lista de dicionários com informações de rastreabilidade
     """
+    source_manifest = []
+    table_data_list = []
+    
     for uploaded_file in uploaded_files:
         # Reset file pointer to beginning
         uploaded_file.seek(0)
@@ -64,6 +69,9 @@ def parse_excel_files(uploaded_files):
                         # Reset index
                         table_data = table_data.reset_index(drop=True)
                         
+                        # Count rows before header processing (this will be our data row count)
+                        data_row_count = len(table_data)
+                        
                         # Set first row as header if it contains non-null values
                         if not table_data.empty and not table_data.iloc[0].isnull().all():
                             # Use first row as column names
@@ -73,6 +81,9 @@ def parse_excel_files(uploaded_files):
                             # Clean column names (remove NaN)
                             table_data.columns = [col if col != 'nan' else f'Column_{i}' 
                                                 for i, col in enumerate(table_data.columns)]
+                            
+                            # Update data row count after removing header
+                            data_row_count = len(table_data)
                         
                         # Add traceability columns if table has data
                         if not table_data.empty:
@@ -81,13 +92,29 @@ def parse_excel_files(uploaded_files):
                             table_data.insert(1, 'Nome da Planilha de Origem', sheet_name)
                             table_data.insert(2, 'Índice da Tabela na Planilha', table_index)
                             
-                            yield table_data
+                            # Add to manifest
+                            source_manifest.append({
+                                'file_name': uploaded_file.name,
+                                'sheet_name': sheet_name,
+                                'table_index': table_index,
+                                'row_count': data_row_count
+                            })
+                            
+                            # Store table data for generator
+                            table_data_list.append(table_data)
                             table_index += 1
                             
         except Exception as e:
             # Skip problematic files but continue processing others
             print(f"Error processing file {uploaded_file.name}: {str(e)}")
             continue
+    
+    # Create generator from stored table data
+    def table_generator():
+        for table_data in table_data_list:
+            yield table_data
+    
+    return table_generator(), source_manifest
 
 
 def create_downloadable_excel(df):
