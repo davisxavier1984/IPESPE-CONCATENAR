@@ -136,6 +136,10 @@ def _build_intelligent_column_order(all_columns: set, base_order: List[str] = No
     unexpected_columns.sort()
     final_order.extend(unexpected_columns)
     
+    # 8. Remover duplicatas preservando ordem
+    seen = set()
+    final_order = [col for col in final_order if not (col in seen or seen.add(col))]
+    
     return final_order
 
 
